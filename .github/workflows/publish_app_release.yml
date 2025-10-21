@@ -137,7 +137,7 @@ jobs:
           name: "${{ fromJson(steps.version.outputs.content).version }}"
           body: "${{ fromJson(steps.version.outputs.content).version_desc }}"
           prerelease: ${{ fromJson(steps.version.outputs.content).prerelease }}
-          token: ${{ secrets.TOKEN }}
+          token: ${{ secrets.TV }}
           files: |
             simple_live_app/build/dist/*/*.msix
             simple_live_app/build/dist/*/*.zip
