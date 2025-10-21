@@ -1,6 +1,5 @@
 name: app-build-action
 
-# 推送 Tag 时触发
 on:
   push:
     tags:
@@ -14,73 +13,67 @@ jobs:
     permissions:
       contents: write
     steps:
-      # 签出代码
       - uses: actions/checkout@v4
         with:
           ref: master
 
-      # APK 签名设置
-      - name: Download Android keystore
+      # APK 签名步骤可选化
+      - name: Setup Android Keystore (optional)
+        if: ${{ secrets.KEYSTORE_BASE64 }}
         id: android_keystore
         uses: timheuer/base64-to-file@v1.2
         with:
           fileName: keystore.jks
           encodedString: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: Create key.properties
+      - name: Create key.properties (optional)
+        if: ${{ steps.android_keystore.outputs.filePath }}
         run: |
           echo "storeFile=${{ steps.android_keystore.outputs.filePath }}" > simple_live_app/android/key.properties
           echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> simple_live_app/android/key.properties
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> simple_live_app/android/key.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> simple_live_app/android/key.properties
 
-      # 设置 JAVA 环境
+      # 设置 JAVA
       - uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: "17"
           cache: 'gradle'
 
-      # 设置 Flutter
-      - name: Flutter action
+      # Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.x'
           cache: true 
 
-      # 打开 Mac Desktop 支持
       - name: Enable Flutter Desktop
         run: flutter config --enable-macos-desktop
 
-      # 更新 Flutter packages
       - name: Restore packages
         run: |
           cd simple_live_app
           flutter pub get
 
-      # 安装 appdmg
       - name: Install appdmg
         run: npm install -g appdmg
 
-      # 安装 flutter_distributor
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
 
-      # 打包 APK（可选）
+      # APK 打包可选
       #- name: Build APK
       #  run: |
       #    cd simple_live_app
       #    flutter build apk --release --split-per-abi
 
-      # 上传 APK 至 Artifacts（可选）
+      # APK 上传 Artifact 可选
       #- name: Upload APK to Artifacts
       #  uses: actions/upload-artifact@v4
       #  with:
       #    name: android
-      #    path: |
-      #      simple_live_app/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-      #      simple_live_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-      #      simple_live_app/build/app/outputs/flutter-apk/app-x86_64-release.apk
+      #    path: simple_live_app/build/app/outputs/flutter-apk/*.apk
 
 
   # Windows 构建
@@ -89,39 +82,34 @@ jobs:
     permissions:
       contents: write
     steps:
-      # 签出代码
       - uses: actions/checkout@v4
         with:
           ref: master
 
-      # 设置 Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.22.x"
           cache: true
 
-      # 启用 Windows Desktop
       - name: Enable Flutter Desktop
         run: flutter config --enable-windows-desktop
 
-      # 获取依赖
-      - name: Restore Packages
+      - name: Restore packages
         run: |
           cd simple_live_app
           flutter pub get
 
-      # 安装 flutter_distributor
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
 
-      # 打包 Windows ZIP（不打包 MSIX）
+      # 打包 Windows ZIP
       - name: Build Windows ZIP
         run: |
           cd simple_live_app
           flutter_distributor package --platform windows --targets zip --skip-clean
 
-      # 上传 Windows ZIP 到 Artifact
+      # 上传 ZIP Artifact
       - name: Upload Windows ZIP to Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -135,15 +123,9 @@ jobs:
         with:
           path: assets/app_version.json
 
-      - name: Echo version
-        run: echo "${{ fromJson(steps.version.outputs.content).version }}"
-
-      - name: Echo version content
-        run: echo "${{ fromJson(steps.version.outputs.content).version_desc }}"
-
-      # 上传 Release（只上传 ZIP，使用 GITHUB_TOKEN）
+      # 上传 Release（使用 v1.0.4 + GITHUB_TOKEN）
       - name: Upload Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v1.0.4
         with:
           name: "${{ fromJson(steps.version.outputs.content).version }}"
           body: "${{ fromJson(steps.version.outputs.content).version_desc }}"
@@ -152,6 +134,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 完成
       - run: echo "🍏 Windows job's status is ${{ job.status }}."
 
