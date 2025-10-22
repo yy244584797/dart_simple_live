@@ -1,0 +1,57 @@
+name: app-build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'dev'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      # 签出代码
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      # 设置 Flutter 环境
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.x"
+          cache: true
+
+      # 启用 Windows 桌面支持
+      - name: Enable Flutter Desktop
+        run: flutter config --enable-windows-desktop
+
+      # 获取依赖
+      - name: Restore Packages
+        run: |
+          cd simple_live_app
+          flutter pub get
+
+      # 安装 flutter_distributor（用于打包）
+      - name: Install flutter_distributor
+        run: dart pub global activate flutter_distributor
+
+      # 打包 Windows ZIP（不打包 msix）
+      - name: Build Windows ZIP
+        run: |
+          cd simple_live_app
+          flutter_distributor package --platform windows --targets zip --skip-clean
+
+      # 上传构建结果到 Artifacts
+      - name: Upload Windows ZIP to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: simple_live_app/build/dist/*/*.zip
+
+      # 完成提示
+      - run: echo "✅ Windows ZIP 打包完成，状态：${{ job.status }}"
