@@ -1,10 +1,11 @@
-name: app-build-windows
+name: windows-build-release
 
+# 手动触发 + push dev 分支触发
 on:
   workflow_dispatch:
   push:
     branches:
-      - 'dev'
+      - dev
 
 jobs:
   build-windows:
@@ -13,47 +14,61 @@ jobs:
       contents: write
 
     steps:
-      # 签出代码
-      - name: Checkout repository
+      # 1️⃣ 签出代码
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          persist-credentials: false
-          submodules: false
+          ref: dev
 
-      # 设置 Flutter 环境
+      # 2️⃣ 设置 Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.22.x"
           cache: true
 
-      # 启用 Windows 桌面支持
-      - name: Enable Flutter Desktop
+      - name: Enable Flutter Windows Desktop
         run: flutter config --enable-windows-desktop
 
-      # 获取依赖
-      - name: Restore Packages
+      - name: Restore Flutter packages
         run: |
           cd simple_live_app
           flutter pub get
 
-      # 安装 flutter_distributor（用于打包）
+      # 3️⃣ 安装 flutter_distributor
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
 
-      # 打包 Windows ZIP（不打包 msix）
+      # 4️⃣ 构建 Windows ZIP
       - name: Build Windows ZIP
         run: |
           cd simple_live_app
           flutter_distributor package --platform windows --targets zip --skip-clean
 
-      # 上传构建结果到 Artifacts
-      - name: Upload Windows ZIP to Artifacts
+      # 5️⃣ 上传 ZIP 到 Artifact（可选调试用）
+      - name: Upload ZIP Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows
+          name: windows-zip
           path: simple_live_app/build/dist/*/*.zip
 
-      # 完成提示
-      - run: echo "✅ Windows ZIP 打包完成，状态：${{ job.status }}"
+      # 6️⃣ 读取版本信息
+      - name: Read version
+        id: version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: simple_live_app/assets/app_version.json
+
+      # 7️⃣ 上传 Release（使用内置 GITHUB_TOKEN，无需自定义 secrets）
+      - name: Upload Windows ZIP to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "${{ fromJson(steps.version.outputs.content).version }}"
+          body: "${{ fromJson(steps.version.outputs.content).version_desc }}"
+          prerelease: ${{ fromJson(steps.version.outputs.content).prerelease }}
+          files: simple_live_app/build/dist/*/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 8️⃣ 完成提示
+      - run: echo "🍏 Windows build and release done, job status: ${{ job.status }}"
