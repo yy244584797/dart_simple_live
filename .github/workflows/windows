@@ -1,0 +1,133 @@
+name: app-build-action
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  # Mac/iOS/Android（可选构建）
+  build-mac-ios-android:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      # 可选：Android keystore，仅当 secret 存在时执行
+      - name: Setup Android Keystore (optional)
+        if: ${{ secrets.KEYSTORE_BASE64 }}
+        id: android_keystore
+        uses: timheuer/base64-to-file@v1.2
+        with:
+          fileName: keystore.jks
+          encodedString: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Create key.properties (optional)
+        if: ${{ steps.android_keystore.outputs.filePath }}
+        run: |
+          echo "storeFile=${{ steps.android_keystore.outputs.filePath }}" > simple_live_app/android/key.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> simple_live_app/android/key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> simple_live_app/android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> simple_live_app/android/key.properties
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: "17"
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.x'
+          cache: true
+
+      - name: Enable Flutter Desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Restore packages
+        run: |
+          cd simple_live_app
+          flutter pub get
+
+      - name: Install appdmg
+        run: npm install -g appdmg
+
+      - name: Install flutter_distributor
+        run: dart pub global activate flutter_distributor
+
+      # (可选) Android 构建，如未配置 keystore 会跳过
+      #- name: Build APK
+      #  run: |
+      #    cd simple_live_app
+      #    flutter build apk --release --split-per-abi
+      #
+      #- name: Upload APK to Artifacts
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: android
+      #    path: simple_live_app/build/app/outputs/flutter-apk/*.apk
+
+
+  # Windows 构建
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.x"
+          cache: true
+
+      - name: Enable Flutter Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Restore packages
+        run: |
+          cd simple_live_app
+          flutter pub get
+
+      - name: Install flutter_distributor
+        run: dart pub global activate flutter_distributor
+
+      # 打包 Windows ZIP
+      - name: Build Windows ZIP
+        run: |
+          cd simple_live_app
+          flutter_distributor package --platform windows --targets zip --skip-clean
+
+      # 上传 ZIP Artifact
+      - name: Upload Windows ZIP to Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: simple_live_app/build/dist/*/*.zip
+
+      # 读取版本信息
+      - name: Read version
+        id: version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: assets/app_version.json
+
+      # 上传 Release（使用内置 GITHUB_TOKEN）
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1.0.4
+        with:
+          name: "${{ fromJson(steps.version.outputs.content).version }}"
+          body: "${{ fromJson(steps.version.outputs.content).version_desc }}"
+          prerelease: ${{ fromJson(steps.version.outputs.content).prerelease }}
+          files: simple_live_app/build/dist/*/*.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: echo "🍏 Windows job's status is ${{ job.status }}."
