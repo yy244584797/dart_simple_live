@@ -14,10 +14,12 @@ jobs:
 
     steps:
       # 签出代码
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: dev
+        fetch-depth: 0
+        persist-credentials: false
+        submodules: false
 
       # 设置 Flutter 环境
       - name: Setup Flutter
