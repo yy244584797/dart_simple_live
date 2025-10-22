@@ -18,14 +18,15 @@ jobs:
         with:
           ref: master
 
-      # ✅ 可选的 Keystore 解码步骤（安全判断）
+      # ✅ 安全检测 base64 keystore 是否存在
       - name: Setup Android Keystore (optional)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         id: android_keystore
         uses: timheuer/base64-to-file@v1.2
         with:
           fileName: keystore.jks
-          encodedString: ${{ secrets.KEYSTORE_BASE64 }}
+          encodedString: ${{ env.KEYSTORE_BASE64 }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
       - name: Create key.properties (optional)
         if: ${{ steps.android_keystore.outputs.filePath != '' }}
@@ -35,7 +36,7 @@ jobs:
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> simple_live_app/android/key.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> simple_live_app/android/key.properties
 
-      # ☕ 设置 JAVA 环境
+      # ☕ 设置 JAVA
       - uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
@@ -63,10 +64,64 @@ jobs:
       - name: Install flutter_distributor
         run: dart pub global activate flutter_distributor
 
-      # 可选打包 Android
-      # - name: Build APK
-      #   run: |
-      #     cd simple_live_app
-      #     flutter build apk --release --split-per-abi
 
-      # 可选上传 APK Artif
+  # 🪟 Windows 构建
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.x"
+          cache: true
+
+      - name: Enable Flutter Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Restore packages
+        run: |
+          cd simple_live_app
+          flutter pub get
+
+      - name: Install flutter_distributor
+        run: dart pub global activate flutter_distributor
+
+      # 🏗️ 打包 Windows ZIP
+      - name: Build Windows ZIP
+        run: |
+          cd simple_live_app
+          flutter_distributor package --platform windows --targets zip --skip-clean
+
+      # 📦 上传 ZIP Artifact
+      - name: Upload Windows ZIP to Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: simple_live_app/build/dist/*/*.zip
+
+      # 🔖 读取版本信息
+      - name: Read version
+        id: version
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: assets/app_version.json
+
+      # 🚀 上传 Release（修复 token 问题）
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "${{ fromJson(steps.version.outputs.content).version }}"
+          body: "${{ fromJson(steps.version.outputs.content).version_desc }}"
+          prerelease: ${{ fromJson(steps.version.outputs.content).prerelease }}
+          files: |
+            simple_live_app/build/dist/*/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: echo "🍏 Windows job's status is ${{ job.status }}"
