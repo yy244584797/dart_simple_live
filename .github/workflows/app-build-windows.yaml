@@ -71,4 +71,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # 8️⃣ 完成提示
-      - run: echo "🍏 Windows build and release done, job status: ${{ job.status }}"
+      - run: echo "🍏 Windows build and release done"
