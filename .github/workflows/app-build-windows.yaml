@@ -54,12 +54,14 @@ jobs:
           name: windows-zip
           path: simple_live_app/build/dist/*/*.zip
 
-      # 6️⃣ 读取版本信息
-      - name: Read version
+      # 6️⃣ 设置版本信息
+      
+      - name: Set version
         id: version
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: simple_live_app/assets/app_version.json
+        run: |
+          echo "VERSION=1.9.4" >> $GITHUB_ENV
+          echo "VERSION_DESC=- 修复虎牙播放中断 #723 @SlotSun\n- 修复哔哩哔哩加载失败" >> $GITHUB_ENV
+          echo "PRERELEASE=true" >> $GITHUB_ENV
 
       # 7️⃣ 上传 Release（使用内置 GITHUB_TOKEN，无需自定义 secrets）
       - name: Upload Windows ZIP to Release
