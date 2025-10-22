@@ -18,7 +18,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: dev
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
 
       # 2️⃣ 设置 Flutter
       - name: Setup Flutter
